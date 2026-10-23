@@ -15,6 +15,13 @@ class ResultType(str, enum.Enum):
     DELETED = "deleted"
 
 
+class ResultSource(str, enum.Enum):
+    """Who decided the score: a person, or a person who took over what the table's sensor counted."""
+
+    MANUAL = "manual"
+    SENSOR = "sensor"
+
+
 class Result(Base):
     __tablename__ = "results"
 
@@ -28,6 +35,9 @@ class Result(Base):
     # None for a deletion
     score_a: Mapped[int | None] = mapped_column(Integer, nullable=True)
     score_b: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source: Mapped[ResultSource] = mapped_column(
+        Enum(ResultSource), nullable=False, default=ResultSource.MANUAL, server_default=ResultSource.MANUAL.name
+    )
     reported_by_user_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("users.id"), nullable=False
     )

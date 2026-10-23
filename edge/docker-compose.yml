@@ -1,0 +1,57 @@
+# The Tournament Core at the venue (docs/edge/README.md): the same API and web app as in the cloud, plus the MQTT
+# broker of the table controllers and a local database. Start with: docker compose -f edge/docker-compose.yml up -d
+services:
+  db:
+    image: postgres:17-alpine
+    restart: always
+    environment:
+      POSTGRES_DB: matchbase
+      POSTGRES_USER: matchbase
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set it in edge/.env}
+    volumes:
+      - core_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U matchbase"]
+      interval: 5s
+      retries: 10
+
+  mqtt:
+    image: eclipse-mosquitto:2
+    restart: always
+    ports:
+      - "1883:1883" # the table controllers reach the broker from the venue network
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - core_mqtt:/mosquitto/data
+
+  api:
+    image: ghcr.io/knoepsim/beerpong-webapp-api:latest
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+      mqtt:
+        condition: service_started
+    environment:
+      NODE_ROLE: edge
+      NODE_NAME: ${NODE_NAME:-Tournament Core}
+      MQTT_URL: mqtt://mqtt:1883
+      DATABASE_URL: postgresql+asyncpg://matchbase:${POSTGRES_PASSWORD}@db:5432/matchbase
+      SECRET_KEY: ${SECRET_KEY:?set it in edge/.env}
+      ENVIRONMENT: ${ENVIRONMENT:-development}
+    command: ["sh", "-c", "uv run alembic upgrade head && uv run fastapi run main.py --host 0.0.0.0 --port 8000"]
+
+  web:
+    image: ghcr.io/knoepsim/beerpong-webapp-web:latest
+    restart: always
+    depends_on:
+      - api
+    environment:
+      NODE_ENV: production
+      API_INTERNAL_URL: http://api:8000
+    ports:
+      - "80:3000"
+
+volumes:
+  core_db:
+  core_mqtt:

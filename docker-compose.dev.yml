@@ -10,5 +10,13 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
+  # broker of the table controllers, for trying out the Tournament Core (docs/edge): API with MQTT_URL=mqtt://localhost:1883
+  mqtt:
+    image: eclipse-mosquitto:2
+    ports:
+      - "1883:1883"
+    volumes:
+      - ./edge/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
 volumes:
   postgres_data:

@@ -1,14 +1,50 @@
+import asyncio
+import contextlib
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.config import settings
 from app.core.exceptions import register_exception_handlers
-from app.routers import admin, auth, events, invitations, invites, matches, results, roles, stations, teams, tournaments, users
+from app.routers import (
+    admin,
+    auth,
+    events,
+    invitations,
+    invites,
+    matches,
+    results,
+    roles,
+    sensors,
+    stations,
+    teams,
+    tournaments,
+    users,
+)
+from app.schemas.sensor import NodeInfo
+from app.services.table_listener import listen
+
+VERSION = "0.1.0"
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI) -> AsyncIterator[None]:
+    """On a Tournament Core (MQTT_URL set) the API listens to the table controllers while it runs."""
+    listener = asyncio.create_task(listen(settings.mqtt_url, settings.mqtt_topic_prefix)) if settings.mqtt_url else None
+    yield
+    if listener:
+        listener.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await listener
+
 
 app = FastAPI(
     title="MatchBase API",
     description="Backend API für die Bierpong-Turnier-App",
-    version="0.1.0",
+    version=VERSION,
+    lifespan=lifespan,
 )
 
 app.add_middleware(
@@ -37,9 +73,16 @@ app.include_router(invites.router)
 app.include_router(invitations.router)
 app.include_router(results.router)
 app.include_router(matches.router)
+app.include_router(sensors.router)
 
 
 @app.get("/status", tags=["System"], summary="System Status")
 def get_status():
     """Health-check endpoint."""
-    return {"status": "online", "version": "0.1.0"}
+    return {"status": "online", "version": VERSION}
+
+
+@app.get("/info", tags=["System"], summary="Wer antwortet", response_model=NodeInfo)
+def get_info():
+    """Cloud or Tournament Core: the web app asks this to find the core at the venue (docs/edge)."""
+    return NodeInfo(name="MatchBase", role=settings.node_role, node=settings.node_name, version=VERSION, api=1)

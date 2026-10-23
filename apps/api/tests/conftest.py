@@ -51,3 +51,9 @@ async def async_client() -> AsyncGenerator[AsyncClient, None]:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
+
+
+@pytest.fixture
+def session_factory() -> async_sessionmaker[AsyncSession]:
+    """The sessions of the test database, for code that opens its own (outside a request)."""
+    return TestingSessionLocal

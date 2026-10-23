@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic import model_validator
 from pydantic_settings import BaseSettings
 
@@ -40,6 +42,15 @@ class Settings(BaseSettings):
     sse_heartbeat_seconds: float = 20
     sse_max_seconds: float = 600
     sse_max_connections: int = 500
+
+    # Edge: the same API runs in the cloud and on a Tournament Core at the venue (docs/edge). Only the core listens to
+    # the table controllers: MQTT_URL (mqtt://host:1883) switches the listener on, without it nothing changes.
+    node_role: Literal["cloud", "edge"] = "cloud"
+    node_name: str = "MatchBase"
+    mqtt_url: str | None = None
+    mqtt_topic_prefix: str = "tables"
+    # a table controller sends its state on every change and as a heartbeat; silent longer than this, it is offline
+    sensor_offline_seconds: float = 30
 
     # Set ENVIRONMENT=production to refuse insecure defaults (dummy SMS, default secret key)
     environment: str = "development"
