@@ -1,4 +1,4 @@
-"""The contract between a table controller and the Tournament Core (docs/edge/protocol.md).
+"""The contract between a table controller and MatchBase Edge (protocol/README.md, tested against protocol/mqtt).
 
 A controller publishes on `{prefix}/{device_id}/state`. The topic names the device, the message only what it sees:
 how many cups stand on each side. How it found out (RFID, camera, hall sensor) does not matter to the core.
@@ -15,7 +15,9 @@ DEVICE_ID = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 class TableState(BaseModel):
     """What a table controller sees, version 1. Field names are camelCase on the wire (`leftCups`)."""
 
-    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="ignore")
+    # strict: types as in protocol/mqtt/table-state.v1.schema.json, "4" is not a count; unknown fields are ignored so a
+    # newer controller still works with an older edge
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True, extra="ignore", strict=True)
 
     v: Literal[1] = 1
     left_cups: int = Field(ge=0, le=99)
