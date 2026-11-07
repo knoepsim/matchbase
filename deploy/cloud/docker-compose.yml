@@ -1,35 +1,40 @@
-# MatchBase Cloud: database, API, web app and the single entry point (deploy/README.md).
-# Copy .env.example to .env next to this file, fill it in, then from here: docker compose up -d
+# One MatchBase Cloud instance: database, API, web app and the single entry point (deploy/README.md).
+# The same file runs any number of instances side by side (e.g. prod and dev); each gets its own env file, which sets
+# INSTANCE (project name, volumes, address in the tunnel network) and MATCHBASE_TAG (latest, dev, 0.2, ...):
+#   docker compose --env-file deploy/cloud/prod.env -f deploy/cloud/docker-compose.yml -f deploy/cloud/tunnel.yml up -d
+# How it is reached is an override: tunnel.yml (cloudflared from deploy/host) or expose.yml (ports 80/443 on the host).
+name: ${INSTANCE:-matchbase}
+
+x-auto-update: &auto-update
+  # Watchtower (deploy/host) only updates containers with this label
+  com.centurylinklabs.watchtower.enable: "true"
 
 services:
   db:
     image: postgres:17-alpine
-    container_name: beerpong-db
     restart: always
     environment:
       POSTGRES_DB: matchbase
       POSTGRES_USER: matchbase
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set it in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set it in the env file}
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U matchbase"]
       interval: 5s
       retries: 10
-    networks:
-      - beerpong-network
 
   api:
-    image: ghcr.io/knoepsim/matchbase-api:latest
-    container_name: beerpong-api
+    image: ghcr.io/knoepsim/matchbase-api:${MATCHBASE_TAG:-latest}
     restart: always
+    labels: *auto-update
     depends_on:
       db:
         condition: service_healthy # the image migrates the schema on start
     # No published port: only the proxy below reaches the API
     environment:
       DATABASE_URL: postgresql+asyncpg://matchbase:${POSTGRES_PASSWORD}@db:5432/matchbase
-      SECRET_KEY: ${SECRET_KEY:?set it in .env}
+      SECRET_KEY: ${SECRET_KEY:?set it in the env file}
       ENVIRONMENT: ${ENVIRONMENT:-production}
       SMS_BACKEND: ${SMS_BACKEND:-dummy}
       SUPER_ADMIN_PHONES: ${SUPER_ADMIN_PHONES:-}
@@ -37,63 +42,31 @@ services:
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
       # Only the proxy can reach the API, so it may pass on the client address and scheme (X-Forwarded-*)
       FORWARDED_ALLOW_IPS: "*"
-    networks:
-      - beerpong-network
 
   web:
-    image: ghcr.io/knoepsim/matchbase-web:latest
-    container_name: beerpong-web
+    image: ghcr.io/knoepsim/matchbase-web:${MATCHBASE_TAG:-latest}
     restart: always
+    labels: *auto-update
     depends_on:
       - api
     environment:
       NODE_ENV: production
       # Server-side requests go straight to the API over the internal network
       API_INTERNAL_URL: http://api:8000
-    # No published port: the proxy below is the only way in
-    networks:
-      - beerpong-network
 
-  # The single entry point (deploy/caddy/Caddyfile): /api to the API, everything else to the web app.
-  # Behind cloudflared: point the tunnel at http://caddy:80 (attach cloudflared to this network) or at port 80 of the
-  # host. Without a tunnel: set SITE_ADDRESS to your domain and Caddy gets the certificate itself.
+  # The single entry point (deploy/caddy/Caddyfile): /api to the API, everything else to the web app
   caddy:
     image: caddy:2
-    container_name: beerpong-caddy
     restart: always
     depends_on:
       - web
       - api
     environment:
       SITE_ADDRESS: ${SITE_ADDRESS:-:80}
-    ports:
-      - "80:80"
-      - "443:443"
-      - "443:443/udp" # HTTP/3
     volumes:
       - ../caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data # certificates
       - caddy_config:/config
-    networks:
-      - beerpong-network
-
-  watchtower:
-    image: containrrr/watchtower
-    container_name: watchtower
-    restart: always
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-      # If your GHCR is private, you need to mount a config.json with your github PAT
-      # - /root/.docker/config.json:/config.json
-    environment:
-      - WATCHTOWER_CLEANUP=true
-      # Check for updates every 5 minutes (300 seconds)
-      - WATCHTOWER_POLL_INTERVAL=300
-    command: beerpong-web beerpong-api
-
-networks:
-  beerpong-network:
-    driver: bridge
 
 volumes:
   db_data:

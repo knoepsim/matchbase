@@ -1,0 +1,14 @@
+# Override: reached through cloudflared (deploy/host). Caddy joins the shared tunnel network under the name of the
+# instance, so the tunnel's public hostname points at http://<INSTANCE>:80 (e.g. http://matchbase-prod:80).
+services:
+  caddy:
+    networks:
+      default:
+      tunnel:
+        aliases:
+          - ${INSTANCE:?set it in the env file}
+
+networks:
+  tunnel:
+    name: matchbase-tunnel
+    external: true # created by deploy/host/docker-compose.yml
