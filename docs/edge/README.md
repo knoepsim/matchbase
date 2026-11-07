@@ -45,8 +45,10 @@ apps/
     app/routers/sensors.py          /devices, /tournaments/{id}/sensors, Zuordnung
     scripts/simulate_table.py       Tisch-Controller ohne Hardware
   web/                     unverändert (Phase 2: Sensoranzeige, Vorschlag übernehmen, Discovery)
+deploy/
+  caddy/Caddyfile          ein Eingang für Cloud und Edge: /api -> API, Rest -> Web (deploy/README.md)
 edge/
-  docker-compose.yml       der komplette Core vor Ort
+  docker-compose.yml       der komplette Core vor Ort, Eingang über Caddy
   mosquitto/mosquitto.conf Broker-Konfiguration
   .env.example
 firmware/                  (Phase 2) esp32-rfid/ (PlatformIO), vision-pi/ (Python)
