@@ -1,11 +1,15 @@
-# Runners: API Tests and Docker Build Check run on the self-hosted runner (tournament-gitrunner).
-# Jobs with secrets (Sonar) stay on GitHub-hosted runners.
+# PR gates for dev and main (docs/CONTRIBUTING.md). All jobs run on GitHub-hosted runners (free for public repos).
 name: Scan
 on:
   push:
     branches: [main, dev]
   pull_request:
     branches: [main, dev]
+
+# a new push to a PR replaces its running checks; runs on dev and main always finish
+concurrency:
+  group: scan-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   sonarqube:
@@ -48,21 +52,30 @@ jobs:
 
   api-tests:
     name: API Tests
-    # Self-hosted runner. It runs as a container with the host's Docker socket (Docker-out-of-Docker),
-    # so neither `container:` jobs (the runner's /__e mount does not exist on the host) nor `services:`
-    # (reachable via localhost) work. PostgreSQL is started by hand and the runner container is
-    # attached to its network, which makes it reachable by container name.
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     defaults:
       run:
         working-directory: ./apps/api
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: beerpong
+          POSTGRES_PASSWORD: beerpong_ci
+          POSTGRES_DB: beerpong
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U beerpong"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 30
     env:
-      PG_NAME: pg-${{ github.run_id }}-${{ github.run_attempt }}
-      DATABASE_URL: postgresql+asyncpg://beerpong:beerpong_ci@pg-${{ github.run_id }}-${{ github.run_attempt }}:5432/beerpong
+      DATABASE_URL: postgresql+asyncpg://beerpong:beerpong_ci@localhost:5432/beerpong
       # Scratch database for the concurrency tests that need real row locks (tables are dropped)
-      TEST_POSTGRES_URL: postgresql+asyncpg://beerpong:beerpong_ci@pg-${{ github.run_id }}-${{ github.run_attempt }}:5432/beerpong_test
+      TEST_POSTGRES_URL: postgresql+asyncpg://beerpong:beerpong_ci@localhost:5432/beerpong_test
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
 
@@ -71,18 +84,8 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Start PostgreSQL
-        run: |
-          docker network create "$PG_NAME"
-          docker run -d --name "$PG_NAME" --network "$PG_NAME"             -e POSTGRES_USER=beerpong -e POSTGRES_PASSWORD=beerpong_ci -e POSTGRES_DB=beerpong             postgres:17-alpine
-          docker network connect "$PG_NAME" "$(hostname)"
-          # -h 127.0.0.1: the temporary init server of the image only listens on the unix socket,
-          # so this only succeeds once the real server is up
-          for i in $(seq 1 30); do
-            docker exec "$PG_NAME" pg_isready -h 127.0.0.1 -U beerpong && break
-            sleep 1
-          done
-          docker exec "$PG_NAME" psql -h 127.0.0.1 -U beerpong -d beerpong -c "CREATE DATABASE beerpong_test"
+      - name: Create the scratch database
+        run: PGPASSWORD=beerpong_ci psql -h localhost -U beerpong -d beerpong -c "CREATE DATABASE beerpong_test"
 
       - name: Install dependencies
         run: uv sync --frozen
@@ -93,44 +96,30 @@ jobs:
       - name: Run API tests
         run: uv run pytest -v
 
-      # --volumes: the postgres image keeps its data in an anonymous volume, which docker rm alone leaves behind (one
-      # per run until the disk of the self-hosted runner is full)
-      - name: Stop PostgreSQL
-        if: always()
-        run: |
-          docker network disconnect "$PG_NAME" "$(hostname)" || true
-          docker rm --force --volumes "$PG_NAME" || true
-          docker network rm "$PG_NAME" || true
-
   docker-build-check:
     name: Docker Build Check
-    runs-on: [self-hosted, Linux, X64]
+    runs-on: ubuntu-latest
     permissions:
       contents: read
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
-      
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # reads the cache docker-publish.yml writes on dev and main (a PR may read its base branch's cache)
       - name: Build Web Docker image (dry run)
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: ./apps/web
           push: false
-          
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,scope=web,mode=max
+
       - name: Build API Docker image (dry run)
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: ./apps/api
           push: false
-
-      # The self-hosted runner keeps what every build leaves behind: without this its disk fills up. Removes the
-      # untagged images of the dry runs, build cache older than a day (recent cache keeps the next builds fast) and
-      # unused anonymous volumes; tagged images, named volumes and containers of the host stay untouched. Runs also
-      # after a failed or cancelled build.
-      - name: Clean up images and build cache
-        if: always()
-        run: |
-          docker image prune --force
-          docker builder prune --all --force --filter "until=24h"
-          # anonymous volumes no container uses any more (named volumes of the host stay)
-          docker volume prune --force
-          docker system df
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max

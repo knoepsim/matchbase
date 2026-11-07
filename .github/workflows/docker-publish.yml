@@ -2,6 +2,7 @@
 # - tag vX.Y.Z on main: release, images X.Y.Z, X.Y and latest (production follows latest)
 # - tag vX.Y.Z-rc.N on dev: test version for a real tournament, image X.Y.Z-rc.N only, never latest
 # - push to dev: preview of the next minor version, images X.(Y+1).0-dev.<run> and dev
+# Tags also get a GitHub Release with notes generated from the commits.
 name: Docker Build and Publish
 
 on:
@@ -68,6 +69,9 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
       # latest only for a release (tag without "-"); X.Y is skipped for pre-releases by the action itself
       - name: Extract metadata (tags, labels)
         id: meta
@@ -91,3 +95,24 @@ jobs:
           build-args: APP_VERSION=${{ needs.version.outputs.version }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # the cache of dev and main also serves the Docker Build Check of PRs against them (scan.yml)
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,scope=${{ matrix.app }},mode=max
+
+  release:
+    name: GitHub Release
+    # only for tags: notes from the Conventional Commits since the previous tag, rc tags as pre-release
+    if: github.ref_type == 'tag'
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          prerelease=false
+          case "$TAG" in *-*) prerelease=true;; esac
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TAG" --generate-notes --verify-tag             --prerelease="$prerelease"
