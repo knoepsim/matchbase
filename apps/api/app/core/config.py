@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     sse_max_seconds: float = 600
     sse_max_connections: int = 500
 
+    # Release version (APP_VERSION): the image gets it from the git tag at build time, see docs/CONTRIBUTING.md
+    app_version: str = "0.0.0-dev"
+
     # Set ENVIRONMENT=production to refuse insecure defaults (dummy SMS, default secret key)
     environment: str = "development"
 

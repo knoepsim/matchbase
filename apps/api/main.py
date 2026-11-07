@@ -8,7 +8,7 @@ from app.routers import admin, auth, events, invitations, invites, matches, resu
 app = FastAPI(
     title="MatchBase API",
     description="Backend API für die Bierpong-Turnier-App",
-    version="0.1.0",
+    version=settings.app_version,
 )
 
 app.add_middleware(
@@ -42,4 +42,4 @@ app.include_router(matches.router)
 @app.get("/status", tags=["System"], summary="System Status")
 def get_status():
     """Health-check endpoint."""
-    return {"status": "online", "version": "0.1.0"}
+    return {"status": "online", "version": settings.app_version}

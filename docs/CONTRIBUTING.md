@@ -1,38 +1,64 @@
 # Contributing Guidelines
 
-Wir verwenden das **GitHub Flow** Branching-Modell. 
-Der `main`-Branch ist immer stabil und deploybar.
+Zwei langlebige Branches:
+
+- **`main`**: nur Releases. Jeder Stand auf `main` ist eine veröffentlichte oder gleich zu veröffentlichende Version.
+- **`dev`**: Integration, Default-Branch auf GitHub. Hier landen alle Features; `dev` muss trotzdem jederzeit
+  releasefähig bleiben (unfertige Teile wie das Edge sind per Konfiguration abgeschaltet, z. B. ohne `MQTT_URL`).
+
+```
+feat/* ──PR (squash)──> dev ──PR (merge commit)──> main ──tag vX.Y.Z──> Release
+                          ^                          │
+                          └──── main zurück in dev ──┘   (nach jedem Release und Hotfix)
+hotfix/* ──PR (squash)──> main ──tag vX.Y.(Z+1)
+```
 
 ## 🌿 Branching & Pull Requests
 
-1. **Branch erstellen:** Erstelle für jedes Feature oder jeden Bugfix einen eigenen Branch vom `main`  
-Format: <type>/<kurze-beschreibung>
-Types: feat, fix, refactor, chore, docs, test, ci
-Beispiele: feat/web-slider-component, fix/api-cors-config
-Nur Kleinbuchstaben, Bindestriche statt Leerzeichen/Unterstriche
-2. **Commit:** Wir nutzen [Conventional Commits (v1.0.0)](https://www.conventionalcommits.org/de/v1.0.0/) für unsere Commit-Nachrichten (z.B. `feat: add new slider`, `fix: header padding`). Pushe danach auf deinen Branch.
-3. **Pull Request (PR) erstellen:** Erstelle einen PR gegen den `main`-Branch.
+1. **Branch erstellen** von `dev` (Hotfix für ein Release: von `main`)
+   Format: `<type>/<kurze-beschreibung>`, Types: feat, fix, refactor, chore, docs, test, ci, hotfix
+   Beispiele: `feat/web-slider-component`, `hotfix/api-image-start`. Nur Kleinbuchstaben und Bindestriche.
+2. **Commit** nach [Conventional Commits (v1.0.0)](https://www.conventionalcommits.org/de/v1.0.0/)
+   (z. B. `feat: add new slider`, `fix: header padding`).
+3. **Pull Request** gegen `dev` (GitHub schlägt `dev` als Ziel vor), Merge per **Squash**: ein Commit pro Feature.
 
+## 🔢 Versionen (SemVer)
+
+`MAJOR.MINOR.PATCH`, vor 1.0 bedeutet ein MINOR-Schritt einen Meilenstein, der auch inkompatibel sein darf; PATCH ist
+nur Fehlerbehebung. Die Version steht an genau einer Stelle: im Git-Tag. CI gibt sie beim Build in die Images
+(`APP_VERSION`, sichtbar unter `GET /api/`); lokal heißt sie `0.0.0-dev`.
+
+| Was | Tag/Branch | Images | Wer bekommt es |
+|---|---|---|---|
+| Release | Tag `vX.Y.Z` auf `main` | `X.Y.Z`, `X.Y`, `latest` | Produktion (Watchtower folgt `latest`) |
+| Testversion | Tag `vX.Y.Z-rc.N` auf `dev` | `X.Y.Z-rc.N` | gezielt, z. B. ein Edge bei einem Testturnier |
+| Vorschau | jeder Push auf `dev` | `X.(Y+1).0-dev.<run>`, `dev` | Test-Server, nie Produktion |
+
+Unabhängig davon versioniert: der MQTT-Vertrag (`v` in der Nachricht, `protocol/`) und der API-Vertrag
+zwischen Cloud und Edge (`api` in `/info`). Sie ändern sich nur bei inkompatiblen Änderungen.
 
 ## 🚧 CI/CD Workflow & PR-Gates
 
-Bevor dein PR in den `main` gemerged werden kann, müssen zwingend alle automatisierten **PR-Gates** (Status Checks) erfolgreich durchlaufen sein:
+Vor dem Merge in `dev` oder `main` müssen alle **PR-Gates** grün sein:
 
-- **Keine geleakten Secrets:** Der *Gitleaks*-Scanner prüft, ob versehentlich Passwörter oder Tokens eingecheckt wurden.
-- **Unit Tests & Coverage:** Alle *Vitest* Tests müssen grün sein. Die Testabdeckung darf nicht signifikant sinken.
-- **E2E Tests:** Die *Playwright* Tests müssen fehlerfrei im Headless-Browser durchlaufen.
-- **SonarCloud Quality Gate:** Coverage und Code-Quality Kriterien müssen von SonarQube abgesegnet werden.
-- **Docker Build Check:** Die Docker-Images für `apps/web` und `apps/api` müssen sich erfolgreich bauen lassen (Dry-Run).
+- **Keine geleakten Secrets:** *Gitleaks* prüft, ob Passwörter oder Tokens eingecheckt wurden.
+- **Unit Tests & Coverage:** alle *Vitest*-Tests grün, die Testabdeckung sinkt nicht signifikant.
+- **E2E Tests:** die *Playwright*-Tests laufen im Headless-Browser fehlerfrei.
+- **API Tests:** *pytest* gegen PostgreSQL, inklusive Migrationen auf einer leeren Datenbank.
+- **SonarCloud Quality Gate:** Coverage und Code-Qualität.
+- **CodeQL:** statische Sicherheitsanalyse.
+- **Docker Build Check:** die Images von `apps/web` und `apps/api` bauen (Dry-Run).
 
-Ohne diese erfolgreichen Checks blockiert GitHub den "Merge"-Button.
+## 🚀 Release
 
-## 🚀 Releases
+1. PR `dev` → `main` mit Titel `release: vX.Y.Z`, Merge per **Merge-Commit** (nicht Squash: sonst laufen die
+   Historien von `dev` und `main` auseinander und der nächste Release-PR hat Konflikte).
+2. Auf `main` taggen:
+   ```bash
+   git switch main && git pull
+   git tag -a vX.Y.Z -m "vX.Y.Z" && git push origin vX.Y.Z
+   ```
+   `docker-publish.yml` baut die Images, Watchtower auf dem Server zieht `latest`.
+3. `main` zurück in `dev` (PR `main` → `dev`, Merge-Commit), damit `dev` den Tag kennt.
 
-Releases werden erst **nach** einem erfolgreichen Merge in den `main` getriggert, und zwar manuell per Git Tag:
-
-```bash
-git tag v1.0.0
-git push origin v1.0.0
-```
-
-Sobald du ein solches Tag pusht, greift die `docker-publish.yml` Pipeline und lädt die finalen Container-Images in die Registry (GHCR) hoch. Watchtower auf deinem Server kann sich diese dann automatisch ziehen.
+**Hotfix:** Branch `hotfix/*` von `main`, PR gegen `main`, Tag `vX.Y.(Z+1)`, danach `main` zurück in `dev`.
