@@ -13,7 +13,7 @@ Dieses Projekt nutzt eine moderne, entkoppelte Monorepo-Architektur, um Frontend
   - Package Manager: `uv` (extrem schneller Resolver für Python)
 - **Containerisierung:**
   - Jede App besitzt ein eigenes `Dockerfile` (Multi-Stage Builds basierend auf Alpine)
-  - Lokales Setup via `docker-compose.yml`
+  - Entwicklung: `docker-compose.dev.yml` (DB, MQTT, optional Caddy); Betrieb: `deploy/cloud`, `deploy/edge` ([deploy/README.md](../deploy/README.md))
 
 ---
 

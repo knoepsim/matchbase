@@ -15,7 +15,8 @@ from sqlalchemy.orm.util import identity_key
 from app.core.events import bus
 from app.models.tournament import Tournament, TournamentTeam
 
-Scope = Literal["tournament", "teams", "bracket", "roles"]
+# "sensors": what the table controllers count (only on a Tournament Core, docs/edge)
+Scope = Literal["tournament", "teams", "bracket", "roles", "sensors"]
 
 _PENDING = "revision_events"
 

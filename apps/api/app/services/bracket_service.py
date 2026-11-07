@@ -18,7 +18,7 @@ from app.core.exceptions import (
     TournamentNotStartedError,
 )
 from app.models.match import Match
-from app.models.result import Result, ResultType
+from app.models.result import Result, ResultSource, ResultType
 from app.schemas.match import BracketResponse, GroupResponse, MatchResponse, MatchStatus, StandingResponse
 from app.schemas.result import ResultCreate
 from app.models.tournament import TournamentMode, TournamentTeam
@@ -293,6 +293,7 @@ class BracketService:
         user_id: UUID,
         winner_team_id: UUID | None = None,
         score: tuple[int, int] | None = None,
+        source: ResultSource = ResultSource.MANUAL,
     ) -> Result:
         """Append a result event and propagate the winner (or its removal) to the next match.
 
@@ -347,6 +348,7 @@ class BracketService:
             winner_team_id=winner_team_id,
             score_a=score[0] if score else None,
             score_b=score[1] if score else None,
+            source=source,
             reported_by_user_id=user_id,
         )
         self.db.add(entry)
@@ -461,14 +463,14 @@ class BracketService:
     async def report_result(self, match_id: UUID, data: ResultCreate, user_id: UUID) -> Result:
         """Report the first result for a match and advance the winner."""
         return await self._record_result(
-            match_id, ResultType.CREATED, user_id, data.winner_team_id, (data.score_a, data.score_b)
+            match_id, ResultType.CREATED, user_id, data.winner_team_id, (data.score_a, data.score_b), data.source
         )
 
 
     async def modify_result(self, match_id: UUID, data: ResultCreate, user_id: UUID) -> Result:
         """Modify an existing result, updating the winner in the next match."""
         return await self._record_result(
-            match_id, ResultType.MODIFIED, user_id, data.winner_team_id, (data.score_a, data.score_b)
+            match_id, ResultType.MODIFIED, user_id, data.winner_team_id, (data.score_a, data.score_b), data.source
         )
 
 

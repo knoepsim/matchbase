@@ -1,0 +1,25 @@
+# The single entry point of MatchBase, the same in the cloud and on a MatchBase Edge: the browser sees one origin, the
+# API under /api (so cookies stay first-party and no CORS is needed), the web app everywhere else.
+#
+# SITE_ADDRESS decides about TLS:
+# - ":80" (default): plain HTTP, for running behind cloudflared or another proxy that terminates TLS
+# - a domain, e.g. "matchbase.example.org": Caddy gets and renews a Let's Encrypt certificate itself (ports 80 and 443
+#   must be reachable from the internet; an edge without a public address needs DNS-01, see deploy/README.md)
+{
+	servers {
+		# Keep X-Forwarded-For from a proxy in front (cloudflared in the same Docker network), not from anyone
+		trusted_proxies static {$TRUSTED_PROXIES:private_ranges}
+	}
+}
+
+{$SITE_ADDRESS::80} {
+	# Same contract as the rewrite in apps/web/next.config.ts: /api/x reaches the API as /x. Event streams
+	# (text/event-stream) are passed through unbuffered by reverse_proxy, the live view needs no extra setting.
+	handle_path /api/* {
+		reverse_proxy {$API_UPSTREAM:api:8000}
+	}
+
+	handle {
+		reverse_proxy {$WEB_UPSTREAM:web:3000}
+	}
+}

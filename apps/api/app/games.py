@@ -39,6 +39,8 @@ class GameRules:
     # whether a match can end even (only where the mode does not need a winner of every match)
     draws: bool = False
     max_score: int = 99
+    # whether the counts a sensor at the station sees (team a, team b) end the match; None where no sensor can tell
+    sensed_end: Callable[[int, int], bool] | None = None
 
 
 def _beerpong(winner: int, loser: int) -> str | None:
@@ -64,6 +66,8 @@ GAMES: dict[Game, GameRules] = {
         score=_beerpong,
         station=StationTerms(singular="Tisch", plural="Tische", accusative="einen Tisch", none="keinen Tisch"),
         modes=(TournamentMode.SINGLE_ELIMINATION, TournamentMode.ROUND_ROBIN, TournamentMode.GROUPS_KNOCKOUT),
+        # the team whose cups are all gone has lost
+        sensed_end=lambda a, b: (a == 0) != (b == 0),
     ),
     Game.FOOTBALL: GameRules(
         label="Fußball",
@@ -92,6 +96,18 @@ def check_draw(game: Game, counts_points: bool, score: int) -> None:
         raise InvalidScoreError("Ein Unentschieden gibt es hier nicht: Wähle den Sieger.")
     if not 0 <= score <= rules.max_score:
         raise InvalidScoreError("So viele Tore sind nicht möglich.")
+
+
+def sensed_result(game: Game, score_a: int, score_b: int) -> tuple[str, int, int] | None:
+    """What the counts of a station's sensor say about the match: ("a" or "b" as winner, score a, score b) once they
+    end it with a possible score, else None (still running, a game without sensors, a count that cannot be)."""
+    rules = GAMES[game]
+    if rules.sensed_end is None or not rules.sensed_end(score_a, score_b) or score_a == score_b:
+        return None
+    winner, (high, low) = ("a", (score_a, score_b)) if score_a > score_b else ("b", (score_b, score_a))
+    if rules.score(high, low):
+        return None
+    return winner, score_a, score_b
 
 
 def stations_of(game: Game) -> StationTerms:

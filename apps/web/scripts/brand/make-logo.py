@@ -19,7 +19,6 @@ VIOLET = "#7C3AED"
 GOLD = "#F59E0B"
 WHITE = "#FFFFFF"
 INK = "#1A1A1E"
-INK_DARK_BG = "#0C0C12"
 PAPER_DARK = "#F0F0F5"
 FONT = "'Plus Jakarta Sans', 'Inter', 'Segoe UI', system-ui, sans-serif"
 
@@ -107,12 +106,10 @@ def icon_at(x: float, y: float, size: float, m: dict) -> str:
     return f'<g transform="translate({x} {y}) scale({size / 512})">{tile()}{mark(m)}</g>'
 
 
-# horizontal (header, small on screen): the small mark; stacked (login, start page, large): the full one
-for suffix, ink, bg in (("", INK, None), ("-dark", PAPER_DARK, INK_DARK_BG)):
-    back = f'<rect width="600" height="128" fill="{bg}"/>' if bg else ""
-    write(f"logo-horizontal{suffix}.svg", svg(back + icon_at(0, 4, 120, SMALL) + wordmark(144, 92, 80, ink), 600, 128))
-for suffix, ink, bg in (("", INK, None), ("-dark", PAPER_DARK, INK_DARK_BG)):
-    back = f'<rect width="460" height="340" fill="{bg}"/>' if bg else ""
-    write(f"logo-stacked{suffix}.svg", svg(back + icon_at(130, 0, 200, FULL) + wordmark(230, 306, 72, ink, "middle"), 460, 340))
+# horizontal (header, small on screen): the small mark; stacked (login, start page, large): the full one. The -dark
+# variants only swap the ink for dark ground and stay transparent, so they sit on any dark background (app, GitHub)
+for suffix, ink in (("", INK), ("-dark", PAPER_DARK)):
+    write(f"logo-horizontal{suffix}.svg", svg(icon_at(0, 4, 120, SMALL) + wordmark(144, 92, 80, ink), 600, 128))
+    write(f"logo-stacked{suffix}.svg", svg(icon_at(130, 0, 200, FULL) + wordmark(230, 306, 72, ink, "middle"), 460, 340))
 write("wordmark.svg", svg(wordmark(0, 70, 80, INK), 440, 92))
-write("wordmark-dark.svg", svg(f'<rect width="440" height="92" fill="{INK_DARK_BG}"/>' + wordmark(0, 70, 80, PAPER_DARK), 440, 92))
+write("wordmark-dark.svg", svg(wordmark(0, 70, 80, PAPER_DARK), 440, 92))

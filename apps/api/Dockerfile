@@ -28,5 +28,5 @@ USER matchbase
 EXPOSE 8000
 
 # Bring the database schema up to date, then serve. exec makes the server PID 1, so it gets the stop signal from Docker.
-# Behind a proxy: FORWARDED_ALLOW_IPS decides whose X-Forwarded-* headers are trusted.
+# Behind a proxy: FORWARDED_ALLOW_IPS decides whose X-Forwarded-* headers are trusted (see deploy/README.md).
 CMD ["sh", "-c", "alembic upgrade head && exec fastapi run main.py --host 0.0.0.0 --port 8000"]

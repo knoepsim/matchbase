@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/knoepsim/beerpong-webapp/protocol/mqtt/table-state.v1.schema.json",
+  "title": "TableState v1",
+  "description": "What a table controller sees, published on tables/{deviceId}/state (QoS 1, retain). The topic names the device, the message only the cups standing on each side. See protocol/README.md.",
+  "type": "object",
+  "required": ["leftCups", "rightCups"],
+  "properties": {
+    "v": {
+      "description": "Version of the contract",
+      "const": 1,
+      "default": 1
+    },
+    "leftCups": {
+      "description": "Cups standing on the left half of the table",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 99
+    },
+    "rightCups": {
+      "description": "Cups standing on the right half of the table",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 99
+    },
+    "seq": {
+      "description": "Counts up with every message, starts again after a restart; repeats (QoS 1) are recognised by it",
+      "type": ["integer", "null"],
+      "minimum": 0
+    },
+    "sensor": {
+      "description": "The technique behind it (rfid, vision, hall, sim), only recorded for the evaluation",
+      "type": ["string", "null"],
+      "maxLength": 20
+    }
+  },
+  "additionalProperties": true
+}
