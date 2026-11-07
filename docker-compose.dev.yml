@@ -16,7 +16,7 @@ services:
     ports:
       - "1883:1883"
     volumes:
-      - ./edge/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./deploy/edge/mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
 
   # Optional, to try the production entry point against the dev servers (pnpm dev, uvicorn on the host):
   # docker compose -f docker-compose.dev.yml --profile proxy up -d caddy, then open http://localhost:8080

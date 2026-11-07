@@ -38,32 +38,33 @@ einmal.
 ```
 apps/
   api/                     FastAPI, läuft als Cloud oder als Core (NODE_ROLE)
-    app/schemas/table_state.py      MQTT-Vertrag v1 (Pydantic, Quelle der Wahrheit)
+    app/schemas/table_state.py      MQTT-Vertrag v1 in Pydantic, gegen protocol/ getestet
     app/models/station_device.py    Controller + Messwert-Log
     app/services/sensor_service.py  Zuordnung Messwert -> Station -> Spiel, Ergebnisvorschlag
     app/services/table_listener.py  MQTT-Client (nur mit MQTT_URL), reconnectet selbst
     app/routers/sensors.py          /devices, /tournaments/{id}/sensors, Zuordnung
     scripts/simulate_table.py       Tisch-Controller ohne Hardware
   web/                     unverändert (Phase 2: Sensoranzeige, Vorschlag übernehmen, Discovery)
+protocol/                  Vertrag Tisch <-> Edge, sprachneutral (Quelle der Wahrheit)
+  README.md                MQTT-Vertrag für Firmware-Entwickler
+  mqtt/table-state.v1.schema.json, mqtt/examples/
 deploy/
   caddy/Caddyfile          ein Eingang für Cloud und Edge: /api -> API, Rest -> Web (deploy/README.md)
-edge/
-  docker-compose.yml       der komplette Core vor Ort, Eingang über Caddy
-  mosquitto/mosquitto.conf Broker-Konfiguration
-  .env.example
+  cloud/                   docker-compose.yml, .env.example
+  edge/                    der komplette Edge vor Ort: docker-compose.yml, .env.example, mosquitto/
 firmware/                  (Phase 2) esp32-rfid/ (PlatformIO), vision-pi/ (Python)
-docs/edge/
-  README.md                dieses Dokument
-  protocol.md              MQTT-Vertrag für Firmware-Entwickler
+docs/
+  edge/README.md           dieses Dokument
+  edge/studienarbeit-entscheidungen.md   Abwägungen und Begründungen
   adr/                     Architekturentscheidungen
 ```
 
-Firmware liegt im selben Repo, weil sie denselben Vertrag implementiert: Eine Änderung an `protocol.md` und an
-`table_state.py` gehört mit der Firmware in denselben PR.
+Firmware liegt im selben Repo, weil sie denselben Vertrag implementiert: Eine Änderung an `protocol/` gehört mit API
+und Firmware in denselben PR. Die Beispielnachrichten in `protocol/mqtt/examples/` prüfen beide Seiten.
 
 ## Backend-Integration (umgesetzt, Phase 1)
 
-1. **Ein Vertrag für alle Sensoren** ([protocol.md](protocol.md)): Ein Controller meldet nur `leftCups` und
+1. **Ein Vertrag für alle Sensoren** ([protocol](../../protocol/README.md)): Ein Controller meldet nur `leftCups` und
    `rightCups`. Ob RFID, Kamera oder Hall-Sensor zählt, steht höchstens informativ im Feld `sensor`.
 2. **Controller melden sich selbst an**: Die erste Nachricht legt den Controller an (`station_devices`).
    Ein Manager ordnet ihn einer Spielstätte zu (`PUT /tournaments/{id}/stations/{sid}/device`). Ein physischer Tisch
@@ -71,7 +72,7 @@ Firmware liegt im selben Repo, weil sie denselben Vertrag implementiert: Eine Ä
 3. **Messwert → Spiel**: Der Core kennt über den Stationsplaner das Spiel, das gerade an der Station läuft. Jeder
    geänderte Stand wird mit Spiel-ID protokolliert (`sensor_readings`). Wiederholungen (gleiche `seq`, MQTT QoS 1)
    und Heartbeats (gleicher Stand) erzeugen keinen Eintrag.
-4. **Sensor schlägt vor, Mensch entscheidet** ([ADR 0003](adr/0003-sensor-schlaegt-vor.md)): Beenden die Zählungen das
+4. **Sensor schlägt vor, Mensch entscheidet** ([ADR 0003](../adr/0003-sensor-schlaegt-vor.md)): Beenden die Zählungen das
    Spiel (die Spielregel in `app/games.py` entscheidet, z. B. eine Seite 0 Becher), liefert
    `GET /tournaments/{id}/sensors` einen `suggestion`. Der Schiedsrichter übernimmt ihn über den normalen
    Ergebnis-Endpunkt mit `source: "sensor"`. Alle Ergebnisregeln (Folgespiel, Gruppen fix, Bestätigung) gelten
@@ -114,8 +115,8 @@ selbst).
 |---|---|---|
 | 1 | Vertrag, Controller-Verwaltung, Messwert-Log, Vorschlag, `/info`, Core-Compose, Simulator | umgesetzt |
 | 2 | Web: Sensorstand an der Station, „Vorschlag übernehmen“ im Ergebnis-Dialog, Controller zuordnen; Seitenwahl (welches Team links); Firmware ESP32/RFID; Broker-ACLs pro Controller | offen |
-| 3 | Sync Cloud ↔ Core ([ADR 0002](adr/0002-sync-single-writer.md)), Anmeldung am Core ohne SMS | offen |
-| 4 | Discovery in der PWA ([ADR 0001](adr/0001-discovery.md)), Offline-Betrieb | offen |
+| 3 | Sync Cloud ↔ Core ([ADR 0002](../adr/0002-sync-single-writer.md)), Anmeldung am Core ohne SMS | offen |
+| 4 | Discovery in der PWA ([ADR 0001](../adr/0001-discovery.md)), Offline-Betrieb | offen |
 
 ## Offene Punkte
 

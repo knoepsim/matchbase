@@ -1,5 +1,5 @@
 # MatchBase Cloud: database, API, web app and the single entry point (deploy/README.md).
-# Copy .env.example to .env, fill it in, then: docker compose up -d
+# Copy .env.example to .env next to this file, fill it in, then from here: docker compose up -d
 
 services:
   db:
@@ -71,7 +71,7 @@ services:
       - "443:443"
       - "443:443/udp" # HTTP/3
     volumes:
-      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data # certificates
       - caddy_config:/config
     networks:

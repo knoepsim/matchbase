@@ -1,5 +1,5 @@
-# The Tournament Core at the venue (docs/edge/README.md): the same API and web app as in the cloud, plus the MQTT
-# broker of the table controllers and a local database. Start with: docker compose -f edge/docker-compose.yml up -d
+# MatchBase Edge at the venue (docs/edge/README.md): the same API and web app as in the cloud, plus the MQTT
+# broker of the table controllers and a local database. Start with: docker compose -f deploy/edge/docker-compose.yml up -d
 services:
   db:
     image: postgres:17-alpine
@@ -7,7 +7,7 @@ services:
     environment:
       POSTGRES_DB: matchbase
       POSTGRES_USER: matchbase
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set it in edge/.env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set it in deploy/edge/.env}
     volumes:
       - core_db:/var/lib/postgresql/data
     healthcheck:
@@ -37,7 +37,7 @@ services:
       NODE_NAME: ${NODE_NAME:-Tournament Core}
       MQTT_URL: mqtt://mqtt:1883
       DATABASE_URL: postgresql+asyncpg://matchbase:${POSTGRES_PASSWORD}@db:5432/matchbase
-      SECRET_KEY: ${SECRET_KEY:?set it in edge/.env}
+      SECRET_KEY: ${SECRET_KEY:?set it in deploy/edge/.env}
       ENVIRONMENT: ${ENVIRONMENT:-development}
       FORWARDED_ALLOW_IPS: "*" # only the proxy can reach the API
 
@@ -65,7 +65,7 @@ services:
       - "443:443"
       - "443:443/udp" # HTTP/3
     volumes:
-      - ../deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ../caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - core_caddy_data:/data # certificates, survive restarts so Let's Encrypt is not asked again
       - core_caddy_config:/config
 

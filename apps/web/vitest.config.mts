@@ -9,7 +9,7 @@ export default defineConfig({
     setupFiles: ['./vitest.setup.ts'],
     globals: true,
     include: ['**/*.test.ts', '**/*.test.tsx'],
-    exclude: ['node_modules/**', '.next/**', 'tests/**', 'e2e/**'],
+    exclude: ['node_modules/**', '.next/**', 'tests/**'],
     coverage: {
       provider: 'v8',
       // Report untested files too, matching what SonarQube counts as new code.
@@ -18,7 +18,6 @@ export default defineConfig({
       exclude: [
         'node_modules/**',
         'components/ui/**', // Exclude shadcn/ui components as per request
-        'components/reui/**', // Vendored ReUI timeline primitives
         '.next/**',
         '**/*.config.*',
         'playwright.config.ts',

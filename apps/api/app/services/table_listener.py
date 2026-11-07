@@ -1,4 +1,4 @@
-"""The Tournament Core listens to its table controllers over MQTT (docs/edge/protocol.md).
+"""The Tournament Core listens to its table controllers over MQTT (protocol/README.md).
 
 Only where MQTT_URL is set (the core at the venue); the cloud never starts it. `handle` is the whole logic and knows
 nothing of MQTT, `listen` only carries the messages to it and reconnects when the broker is gone.

@@ -2,7 +2,7 @@
 
 ## Setup
 - Test-Turniere mit Dummy-Spielern/-Teams (bleiben in der DB, werden wiederverwendet): `uv run python -m scripts.seed_dummy_tournaments create --teams 28 --state running` (apps/api; `--state registration|checkin|both|fresh|running|finished`, `--game beerpong|football`, `--mode single_elimination|round_robin|groups_knockout` (mit `--groups N --advance K`), `seed` erzeugt je ein Turnier pro Phase, `delete` entfernt nur die Dummy-Turniere, `token N` gibt ein Bearer-Token von Dummy Spieler N aus; im lokalen Netz (Handy): `CORS_ORIGINS=http://localhost:3000,http://<IP>:3000` in apps/api/.env und `ALLOWED_DEV_ORIGINS=<IP>` in apps/web/.env.local, dann beide Server neu starten; Dummy-Login in der App: `+49 158 99000001`, SMS-Code `123456`; unter Windows die API mit `PYTHONUTF8=1` starten, wenn ihre Ausgabe umgeleitet wird, sonst kann die Konsole das "→" der Dummy-SMS nicht ausgeben)
-- Edge/Sensorik (Studienarbeit, `docs/edge/README.md`): Broker mit `docker compose -f docker-compose.dev.yml up -d mqtt`, Tisch ohne Hardware: `uv run python -m scripts.simulate_table --device sim-1` (apps/api); der MQTT-Listener der API läuft nur mit `MQTT_URL` und nicht unter Windows (Proactor-Loop), den Core dafür in Docker (`edge/docker-compose.yml`) starten
+- Edge/Sensorik (Studienarbeit, `docs/edge/README.md`): Broker mit `docker compose -f docker-compose.dev.yml up -d mqtt`, Tisch ohne Hardware: `uv run python -m scripts.simulate_table --device sim-1` (apps/api); der MQTT-Listener der API läuft nur mit `MQTT_URL` und nicht unter Windows (Proactor-Loop), den Core dafür in Docker (`deploy/edge/docker-compose.yml`); Betrieb Cloud/Edge: `deploy/README.md`, MQTT-Vertrag: `protocol/` starten
 
 ## Tests (müssen vor PR grün sein)
 - Unit: `pnpm test` (Vitest)

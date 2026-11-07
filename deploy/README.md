@@ -1,6 +1,6 @@
 # Betrieb: ein Eingang für Web und API
 
-Cloud (`docker-compose.yml`) und Edge (`edge/docker-compose.yml`) starten denselben Proxy mit derselben Datei
+Cloud (`cloud/docker-compose.yml`) und Edge (`edge/docker-compose.yml`) starten denselben Proxy mit derselben Datei
 [`caddy/Caddyfile`](caddy/Caddyfile). Begründung und Vergleich mit Traefik, nginx und HAProxy:
 [studienarbeit-entscheidungen.md, 8.8](../docs/edge/studienarbeit-entscheidungen.md#88-deployment-und-betrieb).
 
@@ -14,13 +14,13 @@ Web und API veröffentlichen keine Ports, nur Caddy ist erreichbar.
 ## Cloud starten
 
 ```
-cp .env.example .env   # POSTGRES_PASSWORD und SECRET_KEY setzen (openssl rand -hex 32)
-docker compose up -d
+cp deploy/cloud/.env.example deploy/cloud/.env   # POSTGRES_PASSWORD und SECRET_KEY setzen (openssl rand -hex 32)
+docker compose -f deploy/cloud/docker-compose.yml up -d
 ```
 
 Das API-Image bringt beim Start das Datenbankschema selbst auf den neuesten Stand (`alembic upgrade head`) und startet
-dann den Server. Das Edge startet genauso: `edge/.env.example` nach `edge/.env`, dann
-`docker compose -f edge/docker-compose.yml up -d`.
+dann den Server. Das Edge startet genauso: `deploy/edge/.env.example` nach `deploy/edge/.env`,
+dann `docker compose -f deploy/edge/docker-compose.yml up -d`.
 
 Solange es nur das Dummy-SMS-Backend gibt, startet `ENVIRONMENT=production` absichtlich nicht (jeder Code wäre
 `123456`). Mit `ENVIRONMENT=development` läuft es, ist dann aber nicht für öffentlichen Betrieb geeignet.
