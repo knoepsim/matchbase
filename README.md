@@ -3,7 +3,10 @@
 
 # MatchBase
 
-![MatchBase](apps/web/public/brand/logo-horizontal.svg)
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="apps/web/public/brand/logo-horizontal-dark.svg">
+  <img alt="MatchBase" src="apps/web/public/brand/logo-horizontal.svg" width="360">
+</picture>
 
 Willkommen bei MatchBase, der Turnierplattform! Turniere organisieren und mitspielen: Anmeldung, Check-in, Spielplan und Ergebnisse. Bierpong ist das erste integrierte Spiel, weitere Spiele und Turniermodi folgen.
 
