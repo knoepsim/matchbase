@@ -42,3 +42,6 @@ Thumbs.db
 playwright-report/
 test-results/
 blob-report/
+
+# Instance and host configuration with secrets (deploy/cloud/prod.env, deploy/host/host.env, ...)
+deploy/**/*.env

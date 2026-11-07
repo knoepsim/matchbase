@@ -1,0 +1,33 @@
+# Once per server, next to any number of instances (deploy/cloud): the Cloudflare tunnel into the instances and
+# Watchtower, which updates every container labelled for it when a new image appears under its tag.
+#   docker compose --env-file deploy/host/host.env -f deploy/host/docker-compose.yml up -d
+name: matchbase-host
+
+services:
+  # Remotely managed tunnel: the public hostnames are set in Cloudflare Zero Trust (Networks > Tunnels), e.g.
+  # matchbase.cloud -> http://matchbase-prod:80 and dev.matchbase.cloud -> http://matchbase-dev:80
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: always
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set it in deploy/host/host.env}
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+    networks:
+      - tunnel
+
+  # Maintained fork of containrrr/watchtower (archived in 2025, it no longer talks to Docker 29)
+  watchtower:
+    image: nickfedor/watchtower:1
+    restart: always
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      WATCHTOWER_LABEL_ENABLE: "true" # only containers that opt in: app images and cloudflared, not the databases
+      WATCHTOWER_CLEANUP: "true"
+      WATCHTOWER_POLL_INTERVAL: "300"
+
+networks:
+  tunnel:
+    name: matchbase-tunnel

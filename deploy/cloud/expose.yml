@@ -1,0 +1,8 @@
+# Override: reached directly, without a tunnel. Caddy listens on the host's ports 80 and 443; with SITE_ADDRESS set to
+# the domain it gets the certificate itself. Only one instance per host can use this.
+services:
+  caddy:
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3
