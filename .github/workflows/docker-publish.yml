@@ -1,21 +1,63 @@
+# Images for every stage of the release process (docs/CONTRIBUTING.md):
+# - tag vX.Y.Z on main: release, images X.Y.Z, X.Y and latest (production follows latest)
+# - tag vX.Y.Z-rc.N on dev: test version for a real tournament, image X.Y.Z-rc.N only, never latest
+# - push to dev: preview of the next minor version, images X.(Y+1).0-dev.<run> and dev
+# Tags also get a GitHub Release with notes generated from the commits.
 name: Docker Build and Publish
 
 on:
   push:
+    branches: [dev]
     tags: ['v*.*.*']
   workflow_dispatch:
 
+# a newer push to dev replaces a build that is still running; releases always finish
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref == 'refs/heads/dev' }}
+
 env:
   REGISTRY: ghcr.io
-  IMAGE_NAME_WEB: ${{ github.repository }}-web
-  IMAGE_NAME_API: ${{ github.repository }}-api
 
 jobs:
-  build-and-push-web:
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+        with:
+          fetch-depth: 0 # all tags
+
+      - name: Version from the tag, or the next minor version for dev
+        id: version
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+          RUN: ${{ github.run_number }}
+        run: |
+          if [ "$REF_TYPE" = tag ]; then
+            version="${REF_NAME#v}"
+          else
+            # dev always carries the next minor version: patches of a release go as hotfix to main
+            last=$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | grep -v -- '-' | head -n 1)
+            IFS=. read -r major minor _ <<< "${last#v}"
+            version="${major:-0}.$(( ${minor:-0} + 1 )).0-dev.${RUN}"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "Version: $version" >> "$GITHUB_STEP_SUMMARY"
+
+  publish:
+    name: Publish (${{ matrix.app }})
+    needs: version
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
+    strategy:
+      matrix:
+        app: [web, api]
     steps:
       - name: Checkout repository
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
@@ -27,52 +69,50 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Extract metadata (tags, labels) for Web
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # latest only for a release (tag without "-"); X.Y is skipped for pre-releases by the action itself
+      - name: Extract metadata (tags, labels)
         id: meta
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_WEB }}
+          images: ${{ env.REGISTRY }}/${{ github.repository }}-${{ matrix.app }}
+          flavor: latest=false
           tags: |
             type=semver,pattern={{version}}
-            type=raw,value=latest
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable=${{ github.ref_type == 'tag' && !contains(github.ref_name, '-') }}
+            type=raw,value=${{ needs.version.outputs.version }},enable=${{ github.ref == 'refs/heads/dev' }}
+            type=raw,value=dev,enable=${{ github.ref == 'refs/heads/dev' }}
+          labels: org.opencontainers.image.version=${{ needs.version.outputs.version }}
 
-      - name: Build and push Web Docker image
+      - name: Build and push
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
-          context: ./apps/web
+          context: ./apps/${{ matrix.app }}
           push: true
+          build-args: APP_VERSION=${{ needs.version.outputs.version }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
+          # the cache of dev and main also serves the Docker Build Check of PRs against them (scan.yml)
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,scope=${{ matrix.app }},mode=max
 
-  build-and-push-api:
+  release:
+    name: GitHub Release
+    # only for tags: notes from the Conventional Commits since the previous tag, rc tags as pre-release
+    if: github.ref_type == 'tag'
+    needs: publish
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      packages: write
+      contents: write
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
-
-      - name: Log in to the Container registry
-        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata (tags, labels) for API
-        id: meta
-        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME_API }}
-          tags: |
-            type=semver,pattern={{version}}
-            type=raw,value=latest
-
-      - name: Build and push API Docker image
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
-        with:
-          context: ./apps/api
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
+      - name: Create the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          prerelease=false
+          case "$TAG" in *-*) prerelease=true;; esac
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TAG" --generate-notes --verify-tag             --prerelease="$prerelease"

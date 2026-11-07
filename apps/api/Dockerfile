@@ -7,15 +7,20 @@ WORKDIR /app
 ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 
 # Install dependencies first (without the project itself) so this layer stays cached while only code changes
+# --no-build: only prebuilt wheels, so no setup script of a dependency runs during the build
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-install-project
+RUN uv sync --frozen --no-dev --no-build --no-install-project
 
 # Copy the rest of the application and install the project
 COPY . .
-RUN uv sync --frozen --no-dev
+RUN uv sync --frozen --no-dev --no-build
 
 # Run the tools of the virtual environment directly: "uv run" would check the environment on every start
 ENV PATH="/app/.venv/bin:$PATH"
+
+# The release version, set by CI from the git tag (vX.Y.Z) or as X.Y.Z-dev.N for builds of the dev branch
+ARG APP_VERSION=0.0.0-dev
+ENV APP_VERSION=$APP_VERSION
 
 RUN adduser -D -u 1001 matchbase
 USER matchbase

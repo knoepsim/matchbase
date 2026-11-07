@@ -43,6 +43,9 @@ class Settings(BaseSettings):
     sse_max_seconds: float = 600
     sse_max_connections: int = 500
 
+    # Release version (APP_VERSION): the image gets it from the git tag at build time, see docs/CONTRIBUTING.md
+    app_version: str = "0.0.0-dev"
+
     # Edge: the same API runs in the cloud and on a Tournament Core at the venue (docs/edge). Only the core listens to
     # the table controllers: MQTT_URL (mqtt://host:1883) switches the listener on, without it nothing changes.
     node_role: Literal["cloud", "edge"] = "cloud"

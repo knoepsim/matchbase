@@ -20,7 +20,7 @@ services:
       - beerpong-network
 
   api:
-    image: ghcr.io/knoepsim/beerpong-webapp-api:latest
+    image: ghcr.io/knoepsim/matchbase-api:latest
     container_name: beerpong-api
     restart: always
     depends_on:
@@ -41,7 +41,7 @@ services:
       - beerpong-network
 
   web:
-    image: ghcr.io/knoepsim/beerpong-webapp-web:latest
+    image: ghcr.io/knoepsim/matchbase-web:latest
     container_name: beerpong-web
     restart: always
     depends_on:

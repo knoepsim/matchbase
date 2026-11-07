@@ -26,8 +26,6 @@ from app.routers import (
 from app.schemas.sensor import NodeInfo
 from app.services.table_listener import listen
 
-VERSION = "0.1.0"
-
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -43,7 +41,7 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(
     title="MatchBase API",
     description="Backend API für die Bierpong-Turnier-App",
-    version=VERSION,
+    version=settings.app_version,
     lifespan=lifespan,
 )
 
@@ -79,10 +77,10 @@ app.include_router(sensors.router)
 @app.get("/status", tags=["System"], summary="System Status")
 def get_status():
     """Health-check endpoint."""
-    return {"status": "online", "version": VERSION}
+    return {"status": "online", "version": settings.app_version}
 
 
 @app.get("/info", tags=["System"], summary="Wer antwortet", response_model=NodeInfo)
 def get_info():
-    """Cloud or Tournament Core: the web app asks this to find the core at the venue (docs/edge)."""
-    return NodeInfo(name="MatchBase", role=settings.node_role, node=settings.node_name, version=VERSION, api=1)
+    """Cloud or MatchBase Edge: the web app asks this to find the edge at the venue (docs/edge)."""
+    return NodeInfo(name="MatchBase", role=settings.node_role, node=settings.node_name, version=settings.app_version, api=1)

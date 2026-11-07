@@ -10,9 +10,12 @@
 - Alle Changes müssen lokal verifiziert sein, bevor ein PR erstellt wird — kein "hoffentlich funktioniert's"
 
 ## Branch/Commit Rules
-- Nie direkt auf main pushen, immer Feature-Branch + PR
+- Zwei Branches (Details: `docs/CONTRIBUTING.md`): `dev` = Integration und Default-Branch, `main` = nur Releases
+- Nie direkt auf `dev` oder `main` pushen: Feature-Branch von `dev` + PR gegen `dev` (Squash); Hotfix von `main` + PR gegen `main`
+- Release: PR `dev` → `main` als Merge-Commit (nie Squash), dann Tag `vX.Y.Z` auf `main`, danach `main` zurück in `dev`
+- `dev` bleibt releasefähig: Unfertiges per Konfiguration abschalten statt halbfertig ausliefern
+- Versionen nach SemVer, nur im Git-Tag (CI setzt `APP_VERSION`); keine Versionsnummern im Code pflegen
 - Commits nach Conventional Commits (feat, fix, chore, docs, refactor, test, ci, perf, style)
-- main = immer deploybar, Publish nur bei git tag v*.*.*
 
 ## Code-Qualität
 - Best Practices statt Quick-Fixes: etablierte Patterns der jeweiligen Sprache/Frameworks nutzen (React, FastAPI, TypeScript-Konventionen), keine Eigenkonstruktionen ohne Grund
@@ -30,4 +33,4 @@ Regeln für jede Frontend-Änderung: siehe `apps/web/AGENTS.md`.
 
 ## Do not
 - Keine Secrets committen
-- Docker-Publish-Workflow nicht manuell antriggern
+- Docker-Publish-Workflow nicht manuell antriggern, keine Release-Tags ohne Auftrag
