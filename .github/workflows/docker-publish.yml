@@ -2,7 +2,8 @@
 # - tag vX.Y.Z on main: release, images X.Y.Z, X.Y and latest (production follows latest)
 # - tag vX.Y.Z-rc.N on dev: test version for a real tournament, image X.Y.Z-rc.N only, never latest
 # - push to dev: preview of the next minor version, images X.(Y+1).0-dev.<run> and dev
-# Tags also get a GitHub Release with notes generated from the commits.
+# Every image is built for amd64 (servers, mini PCs) and arm64 (Raspberry Pi as an edge), each on a native runner,
+# then joined into one tag. Tags also get a GitHub Release with notes generated from the commits.
 name: Docker Build and Publish
 
 on:
@@ -48,16 +49,23 @@ jobs:
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "Version: $version" >> "$GITHUB_STEP_SUMMARY"
 
-  publish:
-    name: Publish (${{ matrix.app }})
+  # one image per app and architecture, pushed without a tag (by digest); merge gives them the tags
+  build:
+    name: Build (${{ matrix.app }}, ${{ matrix.arch }})
     needs: version
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
       packages: write
     strategy:
       matrix:
         app: [web, api]
+        arch: [amd64, arm64]
+        include:
+          - arch: amd64
+            runner: ubuntu-latest
+          - arch: arm64
+            runner: ubuntu-24.04-arm
     steps:
       - name: Checkout repository
         uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
@@ -72,12 +80,81 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
-      # latest only for a release (tag without "-"); X.Y is skipped for pre-releases by the action itself
-      - name: Extract metadata (tags, labels)
+      - name: Extract labels
         id: meta
         uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
         with:
           images: ${{ env.REGISTRY }}/${{ github.repository }}-${{ matrix.app }}
+          labels: org.opencontainers.image.version=${{ needs.version.outputs.version }}
+
+      - name: Build and push by digest
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: ./apps/${{ matrix.app }}
+          platforms: linux/${{ matrix.arch }}
+          build-args: APP_VERSION=${{ needs.version.outputs.version }}
+          labels: ${{ steps.meta.outputs.labels }}
+          tags: ${{ env.REGISTRY }}/${{ github.repository }}-${{ matrix.app }}
+          outputs: type=image,push-by-digest=true,name-canonical=true,push=true
+          # the cache of dev and main also serves the Docker Build Checks of PRs against them (scan.yml)
+          cache-from: type=gha,scope=${{ matrix.app }}-${{ matrix.arch }}
+          cache-to: type=gha,scope=${{ matrix.app }}-${{ matrix.arch }},mode=max
+
+      - name: Export digest
+        env:
+          DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/digests"
+          touch "$RUNNER_TEMP/digests/${DIGEST#sha256:}"
+
+      - name: Upload digest
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: digests-${{ matrix.app }}-${{ matrix.arch }}
+          path: ${{ runner.temp }}/digests/*
+          if-no-files-found: error
+          retention-days: 1
+
+  # joins both architectures into one tag per app, then scans the result into the Security tab
+  merge:
+    name: Publish (${{ matrix.app }})
+    needs: [version, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+    strategy:
+      matrix:
+        app: [web, api]
+    env:
+      IMAGE: ghcr.io/${{ github.repository }}-${{ matrix.app }}
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - name: Download digests
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: ${{ runner.temp }}/digests
+          pattern: digests-${{ matrix.app }}-*
+          merge-multiple: true
+
+      - name: Log in to the Container registry
+        uses: docker/login-action@af1e73f918a031802d376d3c8bbc3fe56130a9b0 # v4
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # latest only for a release (tag without "-"); X.Y is skipped for pre-releases by the action itself
+      - name: Extract tags
+        id: meta
+        uses: docker/metadata-action@c299e40c65443455700f0fdfc63efafe5b349051 # v5
+        with:
+          images: ${{ env.IMAGE }}
           flavor: latest=false
           tags: |
             type=semver,pattern={{version}}
@@ -85,25 +162,38 @@ jobs:
             type=raw,value=latest,enable=${{ github.ref_type == 'tag' && !contains(github.ref_name, '-') }}
             type=raw,value=${{ needs.version.outputs.version }},enable=${{ github.ref == 'refs/heads/dev' }}
             type=raw,value=dev,enable=${{ github.ref == 'refs/heads/dev' }}
-          labels: org.opencontainers.image.version=${{ needs.version.outputs.version }}
 
-      - name: Build and push
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+      - name: Create the multi-arch image and push its tags
+        working-directory: ${{ runner.temp }}/digests
+        run: |
+          mapfile -t tags < <(jq -r '.tags[] | "-t", .' <<< "$DOCKER_METADATA_OUTPUT_JSON")
+          digests=()
+          for digest in *; do digests+=("$IMAGE@sha256:$digest"); done
+          docker buildx imagetools create "${tags[@]}" "${digests[@]}"
+          docker buildx imagetools inspect "$IMAGE:$VERSION"
+
+      # not a gate (that is the Docker Build Check of the PR): records what the published image contains
+      - name: Scan the published image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
-          context: ./apps/${{ matrix.app }}
-          push: true
-          build-args: APP_VERSION=${{ needs.version.outputs.version }}
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          # the cache of dev and main also serves the Docker Build Check of PRs against them (scan.yml)
-          cache-from: type=gha,scope=${{ matrix.app }}
-          cache-to: type=gha,scope=${{ matrix.app }},mode=max
+          image-ref: ${{ env.IMAGE }}:${{ env.VERSION }}
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          format: sarif
+          output: trivy.sarif
+
+      - name: Upload the scan to the Security tab
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: trivy.sarif
+          category: image-${{ matrix.app }}
 
   release:
     name: GitHub Release
     # only for tags: notes from the Conventional Commits since the previous tag, rc tags as pre-release
     if: github.ref_type == 'tag'
-    needs: publish
+    needs: merge
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -115,4 +205,5 @@ jobs:
         run: |
           prerelease=false
           case "$TAG" in *-*) prerelease=true;; esac
-          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TAG" --generate-notes --verify-tag             --prerelease="$prerelease"
+          gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --title "$TAG" --generate-notes --verify-tag \
+            --prerelease="$prerelease"

@@ -1,0 +1,36 @@
+# Weekly scan of the released images: new vulnerabilities are found long after an image was built. Findings go to
+# the Security tab (code scanning), next to CodeQL; the fix is a hotfix release (docs/CONTRIBUTING.md).
+name: Image Scan
+
+on:
+  schedule:
+    - cron: '0 5 * * 1' # Mondays 05:00 UTC
+  workflow_dispatch:
+
+jobs:
+  scan:
+    name: Scan (${{ matrix.app }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [web, api]
+    steps:
+      - name: Scan the latest release
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          image-ref: ghcr.io/${{ github.repository }}-${{ matrix.app }}:latest
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          format: sarif
+          output: trivy.sarif
+
+      - name: Upload the scan to the Security tab
+        uses: github/codeql-action/upload-sarif@33d7b85da1a04171e211befe2c739303b9a4c066 # v4.39.3
+        with:
+          sarif_file: trivy.sarif
+          category: image-${{ matrix.app }}-latest

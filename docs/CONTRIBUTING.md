@@ -63,7 +63,16 @@ Vor dem Merge in `dev` oder `main` müssen alle **PR-Gates** grün sein:
 - **API Tests:** *pytest* gegen PostgreSQL, inklusive Migrationen auf einer leeren Datenbank.
 - **SonarCloud Quality Gate:** Coverage und Code-Qualität.
 - **CodeQL:** statische Sicherheitsanalyse.
-- **Docker Build Check:** die Images von `apps/web` und `apps/api` bauen (Dry-Run).
+- **Docker Build Check:** die Images von `apps/web` und `apps/api` bauen, und *Trivy* findet darin keine hohe oder
+  kritische Schwachstelle, für die es einen Fix gibt.
+- **Docker Build Check (arm64):** dieselben Images bauen auch für arm64 (Raspberry Pi als Edge).
+
+Außerhalb der PRs:
+
+- **Image Scan** (montags): *Trivy* prüft die Images von `latest` auf neu bekannt gewordene Schwachstellen. Funde
+  stehen im Security-Tab; behoben wird per Hotfix-Release.
+- **Publish:** Images für amd64 und arm64 unter einem Tag; der Scan des veröffentlichten Images landet ebenfalls im
+  Security-Tab.
 
 ## 🚀 Release
 
