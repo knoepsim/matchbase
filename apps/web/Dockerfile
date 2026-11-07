@@ -26,8 +26,10 @@ ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN pnpm run build
 
-# 3. Production image, copy all the files and run next
-FROM base AS runner
+# 3. Production image, copy all the files and run next. It starts from the plain Node image, not from base: the
+# standalone server needs neither pnpm nor npm, and the npm bundled with Node only adds packages to scan and patch.
+FROM node:22-alpine AS runner
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack     /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
 WORKDIR /app
 
 ENV NODE_ENV=production
