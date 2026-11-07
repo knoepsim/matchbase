@@ -96,6 +96,8 @@ jobs:
       - name: Run API tests
         run: uv run pytest -v
 
+  # builds both images and blocks the PR if they contain a high or critical vulnerability that has a fix. One job
+  # (not a matrix), because the branch protection requires a check with exactly this name.
   docker-build-check:
     name: Docker Build Check
     runs-on: ubuntu-latest
@@ -108,18 +110,63 @@ jobs:
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       # reads the cache docker-publish.yml writes on dev and main (a PR may read its base branch's cache)
-      - name: Build Web Docker image (dry run)
+      - name: Build Web Docker image
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: ./apps/web
-          push: false
-          cache-from: type=gha,scope=web
-          cache-to: type=gha,scope=web,mode=max
+          load: true
+          tags: matchbase-web:check
+          cache-from: type=gha,scope=web-amd64
 
-      - name: Build API Docker image (dry run)
+      - name: Build API Docker image
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: ./apps/api
+          load: true
+          tags: matchbase-api:check
+          cache-from: type=gha,scope=api-amd64
+
+      - name: Scan the Web image for fixable vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.76.2 # the action ships v0.70.0
+          image-ref: matchbase-web:check
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+
+      - name: Scan the API image for fixable vulnerabilities
+        if: success() || failure() # report both images even if the first has findings
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          version: v0.76.2 # the action ships v0.70.0
+          image-ref: matchbase-api:check
+          scanners: vuln
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          exit-code: "1"
+          skip-setup-trivy: true
+
+  # the same images for arm64 (Raspberry Pi as an edge), so a package without an arm64 build fails before the merge
+  docker-build-check-arm64:
+    name: Docker Build Check (arm64)
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [web, api]
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build ${{ matrix.app }} image
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: ./apps/${{ matrix.app }}
           push: false
-          cache-from: type=gha,scope=api
-          cache-to: type=gha,scope=api,mode=max
+          cache-from: type=gha,scope=${{ matrix.app }}-arm64
