@@ -129,6 +129,7 @@ jobs:
       - name: Scan the Web image for fixable vulnerabilities
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
+          version: v0.76.2 # the action ships v0.70.0
           image-ref: matchbase-web:check
           scanners: vuln
           severity: CRITICAL,HIGH
@@ -139,6 +140,7 @@ jobs:
         if: success() || failure() # report both images even if the first has findings
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
+          version: v0.76.2 # the action ships v0.70.0
           image-ref: matchbase-api:check
           scanners: vuln
           severity: CRITICAL,HIGH
