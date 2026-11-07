@@ -22,6 +22,22 @@ hotfix/* ──PR (squash)──> main ──tag vX.Y.(Z+1)
    (z. B. `feat: add new slider`, `fix: header padding`).
 3. **Pull Request** gegen `dev` (GitHub schlägt `dev` als Ziel vor), Merge per **Squash**: ein Commit pro Feature.
 
+## 🔀 Welcher Merge-Button?
+
+| Pull Request | Button | Warum |
+|---|---|---|
+| Feature/Fix/Chore → `dev` | **Squash and merge** | ein Commit pro Änderung, der PR-Titel wird die Commit-Nachricht (Conventional Commit) |
+| Hotfix → `main` | **Squash and merge** | wie oben, nur direkt auf das Release |
+| Release `dev` → `main` | **Create a merge commit** | `main` übernimmt die Commits von `dev` unverändert; nur so bleiben beide Branches eine gemeinsame Historie |
+| Rückführung `main` → `dev` | **Create a merge commit** | holt Release-Merge und Hotfixes nach `dev`, ohne Commits umzuschreiben |
+
+**Rebase and merge nie verwenden.** GitHub schreibt dabei jeden Commit neu (neue SHA). Bei einem Release-PR hätten
+`dev` und `main` danach dieselben Änderungen in verschiedenen Commits, und der nächste Release-PR zeigt Konflikte in
+Dateien, die niemand angefasst hat. Bei Feature-PRs bringt Rebase nichts, was Squash nicht besser kann.
+
+Faustregel: **In einen Branch hinein, der ein langlebiger Branch ist (`dev`, `main`), kommt ein Feature per Squash,
+ein anderer langlebiger Branch per Merge-Commit.**
+
 ## 🔢 Versionen (SemVer)
 
 `MAJOR.MINOR.PATCH`, vor 1.0 bedeutet ein MINOR-Schritt einen Meilenstein, der auch inkompatibel sein darf; PATCH ist
